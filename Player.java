@@ -26,7 +26,7 @@ public class Player {
             int bestValue=-valueWin;
             int value;
             GameState bestMove=lNextStates.firstElement();
-            System.err.println("new tern------------------------------------------------------");
+            //System.err.println("new tern------------------------------------------------------");
             for(GameState childState: lNextStates){
                 value=negaMax(childState, 6,1);
                 if(value>bestValue){
@@ -34,7 +34,8 @@ public class Player {
                     bestMove=childState;
                 }
             System.err.println(childState.toString(Constants.CELL_WHITE));
-            System.err.println(value);
+            //System.err.println(value);
+            System.err.println(value(childState));
             }
             return bestMove;
             
@@ -84,9 +85,14 @@ public class Player {
                 int cell=gameState.get(row, col);
                 if(cell==colourPlayer){
                     number++;
+                    //System.err.println(cell);
+                }
+                if(cell ==Constants.CELL_KING+colourPlayer){
+                    number+=4;
                 }
                 
             }
+
         }
        return number;
     }
