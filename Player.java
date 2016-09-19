@@ -28,7 +28,7 @@ public class Player {
             GameState bestMove=lNextStates.firstElement();
             //System.err.println("new tern------------------------------------------------------");
             for(GameState childState: lNextStates){
-                value=negaMax(childState, 6,1);
+                value=negaMax(childState, 8, -valueWin, valueWin ,1);
                 if(value>bestValue){
                     bestValue=value;
                     bestMove=childState;
@@ -45,7 +45,9 @@ public class Player {
             return lNextStates.elementAt(random.nextInt(lNextStates.size()));
         }
     }
-    public int negaMax(GameState gameState, int depth, int colour ){
+    public int negaMax(GameState gameState, int depth, 
+            int alpha, int beta, int colour ){
+        int tmpValue=0;
         if(gameState.isEOG()){
             return valueEnd(gameState)*colour;
         }
@@ -55,10 +57,15 @@ public class Player {
         else{
             Vector<GameState> lNextStates = new Vector<>();
             gameState.findPossibleMoves(lNextStates);
+            
             int bestMove=-10000;
             for(GameState childState:lNextStates){
-                bestMove=Math.
-                        max(bestMove, -negaMax(childState, depth-1,-colour));
+                tmpValue=-negaMax(childState, depth-1, -beta, -alpha, -colour);
+                bestMove=Math.max(bestMove, tmpValue);
+                alpha=Math.max(alpha, tmpValue);
+                if(alpha>=beta){
+                    break;
+                }
             }
             return bestMove;
             
