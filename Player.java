@@ -16,6 +16,7 @@ public class Player {
      */
     public GameState play(final GameState pState, final Deadline pDue) {
         Vector<GameState> lNextStates = new Vector<GameState>();
+	pState.findPossibleMoves(lNextStates);
 
         if (lNextStates.size() == 0) {
             // Must play "pass" move if there are no other moves possible.
@@ -25,12 +26,15 @@ public class Player {
             int bestValue=-valueWin;
             int value;
             GameState bestMove=lNextStates.firstElement();
+            System.err.println("new tern------------------------------------------------------");
             for(GameState childState: lNextStates){
-                value=negaMax(childState, 3,-1);
+                value=negaMax(childState, 6,1);
                 if(value>bestValue){
                     bestValue=value;
                     bestMove=childState;
                 }
+            System.err.println(childState.toString(Constants.CELL_WHITE));
+            System.err.println(value);
             }
             return bestMove;
             
@@ -45,10 +49,11 @@ public class Player {
             return valueEnd(gameState)*colour;
         }
         else if(depth==0){
-            return 0;
+            return value(gameState)*colour;
         }
         else{
             Vector<GameState> lNextStates = new Vector<>();
+            gameState.findPossibleMoves(lNextStates);
             int bestMove=-10000;
             for(GameState childState:lNextStates){
                 bestMove=Math.
@@ -59,7 +64,7 @@ public class Player {
         }
     }
     
-        public int valueEnd(GameState gameState){
+    public int valueEnd(GameState gameState){
         if(gameState.isRedWin()||gameState.isWhiteWin()){
             return valueWin;
         }
@@ -67,5 +72,22 @@ public class Player {
             return valueTie;
         }
         
+    }
+        public int value(GameState gameState){
+            return number(gameState, Constants.CELL_WHITE)
+                    -number(gameState, Constants.CELL_RED);
+        }
+    public int number(GameState gameState, int colourPlayer){
+        int number=0;
+        for( int row=0; row<8; row++){
+            for(int col=0;col<8;col++){
+                int cell=gameState.get(row, col);
+                if(cell==colourPlayer){
+                    number++;
+                }
+                
+            }
+        }
+       return number;
     }
 }
