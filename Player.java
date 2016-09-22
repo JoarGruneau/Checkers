@@ -6,6 +6,8 @@ public class Player {
     int valueWin=1000;
     int valueTie=0;
     int boardSize=8;
+    int hash_capacity = 1000000;
+    HashMap<String, Integer> visited_states = new HashMap<String, Integer>(hash_capacity);
     /**
      * Performs a move
      *
@@ -30,12 +32,12 @@ public class Player {
         //System.err.println("new tern------------------------------------------------------");
         for(GameState childState: lNextStates){
             if(pState.getNextPlayer()==Constants.CELL_RED){
-                tmp_value=-negaMax(childState, 8, -valueWin, valueWin ,1);
+                tmp_value=-negaMax(childState, 11, -valueWin, valueWin ,1);
                 //bestMove=lNextStates.firstElement();
                 //System.err.println(childState.toString(Constants.CELL_RED));
             }
             else{
-                tmp_value=negaMax(childState, 8, -valueWin, valueWin ,-1);
+                tmp_value=-negaMax(childState, 11, -valueWin, valueWin ,-1);
                 //System.err.println(childState.toString(Constants.CELL_WHITE));
             }
             if(tmp_value>bestValue){
@@ -51,6 +53,7 @@ public class Player {
     public int negaMax(GameState gameState, int depth, int alpha, int beta,
             int colour){
         int tmpValue;
+        String childStateString;
         if(gameState.isEOG()){
             return valueEnd(gameState)*colour;
         }
@@ -58,12 +61,28 @@ public class Player {
             return value(gameState, colour)*colour;
         }
         else{
+
             Vector<GameState> lNextStates = new Vector<>();
             gameState.findPossibleMoves(lNextStates);
             
             int bestMove=-1000;
             for(GameState childState:lNextStates){
-                tmpValue=-negaMax(childState, depth-1,-beta,-alpha, -colour);
+                if(colour==1){
+                   childStateString = getGamestateString(childState); 
+                }
+                else{
+                    childStateString=getGamestateString(childState.reversed());
+                }
+                if(isVisited(childStateString)){
+                    tmpValue = getVisitedValue(childStateString)*colour;  
+                }
+                
+                else{
+                        // if not in hashMap, compute value and store in hashMap
+                    tmpValue=-negaMax(childState, depth-1,-beta,-alpha, -colour);
+                    storeVisited(childStateString,tmpValue*colour);
+                }
+                //tmpValue=-negaMax(childState, depth-1,-beta,-alpha, -colour);
                 bestMove=Math.max(bestMove, tmpValue);
                 alpha=Math.max(alpha, tmpValue);
                 if(alpha>=beta){
@@ -78,8 +97,11 @@ public class Player {
     }
     
     public int valueEnd(GameState gameState){
-        if(gameState.isRedWin()||gameState.isWhiteWin()){
+        if(gameState.isWhiteWin()){
             return valueWin;
+        }
+        else if(gameState.isRedWin()){
+            return -valueWin;
         }
         else{
             return valueTie;
@@ -111,7 +133,7 @@ public class Player {
             }
 
         }
-       return number;//longestJump;
+       return number +longestJump;
     }
     public int killerJump(GameState gameState, int pRow, 
             int pCol, int colourPlayer){
@@ -145,6 +167,28 @@ public class Player {
     }
     public int takable(GameState gameState, int row, int col){
         return 1;
+    }
+    public String getGamestateString(GameState gamestate){
+        String return_str = "";
+        int nr_cells = boardSize*boardSize/2;
+        for(int i = 0; i< nr_cells; i++){
+            return_str += Integer.toString(gamestate.get(i));
+        }
+        return return_str;
+    }
+
+    public boolean isVisited(String gamestate_string){
+        return visited_states.containsKey(gamestate_string);
+    }
+
+    public int getVisitedValue(String gamestate_string){
+        // Only call this function if containsVisited has returned true first
+        return visited_states.get(gamestate_string); 
+    }
+
+    public void storeVisited(String gamestate_string, int value){
+        visited_states.put(gamestate_string, value);
+        return;
     }
     
 }
