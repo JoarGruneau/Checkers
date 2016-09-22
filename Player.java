@@ -5,6 +5,7 @@ public class Player {
     int white=1;
     int valueWin=1000;
     int valueTie=0;
+    int boardSize=8;
     /**
      * Performs a move
      *
@@ -16,57 +17,61 @@ public class Player {
      */
     public GameState play(final GameState pState, final Deadline pDue) {
         Vector<GameState> lNextStates = new Vector<GameState>();
+        //Vector<GameState> lNextStates2 = new Vector<GameState>();
 	pState.findPossibleMoves(lNextStates);
 
         if (lNextStates.size() == 0) {
             // Must play "pass" move if there are no other moves possible.
             return new GameState(pState, new Move());
         }
-        if(pState.getNextPlayer()==Constants.CELL_RED){
-            int bestValue=-valueWin;
-            int value;
-            GameState bestMove=lNextStates.firstElement();
-            //System.err.println("new tern------------------------------------------------------");
-            for(GameState childState: lNextStates){
-                value=negaMax(childState, 8, -valueWin, valueWin ,1);
-                if(value>bestValue){
-                    bestValue=value;
-                    bestMove=childState;
-                }
-            System.err.println(childState.toString(Constants.CELL_WHITE));
-            //System.err.println(value);
-            System.err.println(value(childState));
+        int bestValue=-valueWin;
+        int tmp_value;
+        GameState bestMove=lNextStates.firstElement();
+        //System.err.println("new tern------------------------------------------------------");
+        for(GameState childState: lNextStates){
+            if(pState.getNextPlayer()==Constants.CELL_RED){
+                tmp_value=-negaMax(childState, 8, -valueWin, valueWin ,1);
+                //bestMove=lNextStates.firstElement();
+                //System.err.println(childState.toString(Constants.CELL_RED));
             }
-            return bestMove;
+            else{
+                tmp_value=negaMax(childState, 8, -valueWin, valueWin ,-1);
+                //System.err.println(childState.toString(Constants.CELL_WHITE));
+            }
+            if(tmp_value>bestValue){
+                bestValue=tmp_value;
+                bestMove=childState;
+            }
+        //System.err.println(tmp_value);
+        //System.err.println(value(childState, 1));
+        }
+        return bestMove;
             
-        }
-        else{
-            Random random = new Random();
-            return lNextStates.elementAt(random.nextInt(lNextStates.size()));
-        }
     }
-    public int negaMax(GameState gameState, int depth, 
-            int alpha, int beta, int colour ){
-        int tmpValue=0;
+    public int negaMax(GameState gameState, int depth, int alpha, int beta,
+            int colour){
+        int tmpValue;
         if(gameState.isEOG()){
             return valueEnd(gameState)*colour;
         }
         else if(depth==0){
-            return value(gameState)*colour;
+            return value(gameState, colour)*colour;
         }
         else{
             Vector<GameState> lNextStates = new Vector<>();
             gameState.findPossibleMoves(lNextStates);
             
-            int bestMove=-10000;
+            int bestMove=-1000;
             for(GameState childState:lNextStates){
-                tmpValue=-negaMax(childState, depth-1, -beta, -alpha, -colour);
+                tmpValue=-negaMax(childState, depth-1,-beta,-alpha, -colour);
                 bestMove=Math.max(bestMove, tmpValue);
                 alpha=Math.max(alpha, tmpValue);
                 if(alpha>=beta){
                     break;
                 }
+                
             }
+            
             return bestMove;
             
         }
@@ -81,26 +86,65 @@ public class Player {
         }
         
     }
-        public int value(GameState gameState){
-            return number(gameState, Constants.CELL_WHITE)
-                    -number(gameState, Constants.CELL_RED);
+        public int value(GameState gameState, int colour){
+            return number(gameState, Constants.CELL_WHITE, colour==1)
+                    -number(gameState, Constants.CELL_RED, colour==-1);
         }
-    public int number(GameState gameState, int colourPlayer){
+    public int number(GameState gameState, int colourPlayer, boolean play){
         int number=0;
-        for( int row=0; row<8; row++){
-            for(int col=0;col<8;col++){
+        int longestJump=0;
+        for( int row=0; row<boardSize; row++){
+            for(int col=0;col<boardSize;col++){
                 int cell=gameState.get(row, col);
-                if(cell==colourPlayer){
+                if(cell==colourPlayer && play){
                     number++;
-                    //System.err.println(cell);
+                    longestJump=Math.max(longestJump, 
+                            killerJump(gameState, row, col, colourPlayer));
                 }
-                if(cell ==Constants.CELL_KING+colourPlayer){
+                else if(cell==colourPlayer){
+                    number++;
+                }
+                else if(cell ==Constants.CELL_KING+colourPlayer){
                     number+=4;
                 }
                 
             }
 
         }
-       return number;
+       return number;//longestJump;
     }
+    public int killerJump(GameState gameState, int pRow, 
+            int pCol, int colourPlayer){
+        int oponent= (colourPlayer==Constants.CELL_WHITE) 
+                ? Constants.CELL_RED :Constants.CELL_WHITE;
+        int cellLeft2;
+        int cellRight2;
+        int cellLeft;
+        int cellRight;
+        int jumpLeft=0;
+        int jumpRight=0;
+        int longestJump;
+        GameState tmpState;
+        cellLeft=gameState.get(pRow-1, pCol-1);
+        cellLeft2=gameState.get(pRow-2, pCol-2);
+        if(cellLeft==oponent && cellLeft2==Constants.CELL_EMPTY){
+            tmpState=gameState;
+            tmpState.set((pRow-1)*4+pCol-1,Constants.CELL_EMPTY);
+            jumpLeft=1+killerJump(tmpState, pRow-2, pCol-2, colourPlayer);
+        }
+        cellRight=gameState.get(pRow-1, pCol+1);
+        cellRight2=gameState.get(pRow-2, pCol+2);
+        if(cellRight==oponent&& cellRight2==Constants.CELL_EMPTY){
+            tmpState=gameState;
+            tmpState.set((pRow-1)*4+pCol+1,Constants.CELL_EMPTY);
+            jumpRight=1+killerJump(tmpState, pRow-2, pCol+2, colourPlayer);
+        }
+        longestJump=Math.max(jumpLeft,jumpRight);
+                
+        return longestJump;
+    }
+    public int takable(GameState gameState, int row, int col){
+        return 1;
+    }
+    
 }
