@@ -6,8 +6,11 @@ public class Player {
     int valueWin=1000;
     int valueTie=0;
     int boardSize=8;
-    int hash_capacity = 1000000;
-    HashMap<String, Integer> visited_states = new HashMap<String, Integer>(hash_capacity);
+    int maxDepth = 10;
+    int hashCapacity = 10000000;
+    HashMap<String, Integer> visitedStatesW = new HashMap<String, Integer>(hashCapacity);
+    HashMap<String, Integer> visitedStatesR = new HashMap<String, Integer>(hashCapacity);
+
     /**
      * Performs a move
      *
@@ -20,7 +23,7 @@ public class Player {
     public GameState play(final GameState pState, final Deadline pDue) {
         Vector<GameState> lNextStates = new Vector<GameState>();
         //Vector<GameState> lNextStates2 = new Vector<GameState>();
-	pState.findPossibleMoves(lNextStates);
+        pState.findPossibleMoves(lNextStates);
 
         if (lNextStates.size() == 0) {
             // Must play "pass" move if there are no other moves possible.
@@ -32,12 +35,12 @@ public class Player {
         //System.err.println("new tern------------------------------------------------------");
         for(GameState childState: lNextStates){
             if(pState.getNextPlayer()==Constants.CELL_RED){
-                tmp_value=-negaMax(childState, 11, -valueWin, valueWin ,1);
+                tmp_value=-negaMax(childState, maxDepth, -valueWin, valueWin ,1);
                 //bestMove=lNextStates.firstElement();
                 //System.err.println(childState.toString(Constants.CELL_RED));
             }
             else{
-                tmp_value=-negaMax(childState, 11, -valueWin, valueWin ,-1);
+                tmp_value=-negaMax(childState, maxDepth, -valueWin, valueWin ,-1);
                 //System.err.println(childState.toString(Constants.CELL_WHITE));
             }
             if(tmp_value>bestValue){
@@ -47,6 +50,8 @@ public class Player {
         //System.err.println(tmp_value);
         //System.err.println(value(childState, 1));
         }
+        System.err.println(visitedStatesW.size());
+        System.err.println(visitedStatesR.size());
         return bestMove;
             
     }
@@ -67,20 +72,17 @@ public class Player {
             
             int bestMove=-1000;
             for(GameState childState:lNextStates){
-                if(colour==1){
-                   childStateString = getGamestateString(childState); 
+
+                childStateString = getGamestateString(childState);
+
+                if(isVisited(childStateString, colour)){
+                    tmpValue = getVisitedValue(childStateString, colour);  
                 }
-                else{
-                    childStateString=getGamestateString(childState.reversed());
-                }
-                if(isVisited(childStateString)){
-                    tmpValue = getVisitedValue(childStateString)*colour;  
-                }
-                
                 else{
                         // if not in hashMap, compute value and store in hashMap
                     tmpValue=-negaMax(childState, depth-1,-beta,-alpha, -colour);
-                    storeVisited(childStateString,tmpValue*colour);
+                    storeVisited(childStateString,tmpValue, colour);
+                    //storeVisited(getGamestateString(childState.reversed()), tmpValue*colour, -colour);
                 }
                 //tmpValue=-negaMax(childState, depth-1,-beta,-alpha, -colour);
                 bestMove=Math.max(bestMove, tmpValue);
@@ -108,9 +110,9 @@ public class Player {
         }
         
     }
-        public int value(GameState gameState, int colour){
-            return number(gameState, Constants.CELL_WHITE, colour==1)
-                    -number(gameState, Constants.CELL_RED, colour==-1);
+    public int value(GameState gameState, int colour){
+        return number(gameState, Constants.CELL_WHITE, colour==1)
+                -number(gameState, Constants.CELL_RED, colour==-1);
         }
     public int number(GameState gameState, int colourPlayer, boolean play){
         int number=0;
@@ -177,17 +179,20 @@ public class Player {
         return return_str;
     }
 
-    public boolean isVisited(String gamestate_string){
-        return visited_states.containsKey(gamestate_string);
+    public boolean isVisited(String gamestateString, int colour){
+        HashMap<String, Integer> visitedStates = (colour == 1) ? visitedStatesW : visitedStatesR;
+        return visitedStates.containsKey(gamestateString);
     }
 
-    public int getVisitedValue(String gamestate_string){
+    public int getVisitedValue(String gamestateString, int colour){
         // Only call this function if containsVisited has returned true first
-        return visited_states.get(gamestate_string); 
+        HashMap<String, Integer> visitedStates = (colour == 1) ? visitedStatesW : visitedStatesR;
+        return visitedStates.get(gamestateString); 
     }
 
-    public void storeVisited(String gamestate_string, int value){
-        visited_states.put(gamestate_string, value);
+    public void storeVisited(String gamestateString, int value, int colour){
+        HashMap<String, Integer> visitedStates = (colour == 1) ? visitedStatesW : visitedStatesR;
+        visitedStates.put(gamestateString, value);
         return;
     }
     
