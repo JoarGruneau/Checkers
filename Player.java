@@ -1,15 +1,27 @@
 import java.util.*;
 
+/*POSSIBLE IMPROVEMENTS
+    - Ordered alphabeta pruning
+    - Fix the value function so it doesnt have to run twice
+    - Better heuristics
+    - Symmetry checking for the repeated states
+    - Maybe taking the deadline into account helps
+    - Try to implement iterative negamax
+*/
+
 public class Player {
     int red=-1;
     int white=1;
-    int valueWin=1000;
-    int valueTie=0;
+    double valueWin=1000.0;
+    double valueTie=0.0;
     int boardSize=8;
-    int maxDepth = 10;
+    int maxDepth = 11;
+    int extraDepth = 5; // used for iterative NegaMax
+    boolean useDeadline = true;
+    long timeLimitThresh = 10000000; // 1*10^8 = 0.1 seconds 
     int hashCapacity = 10000000;
-    HashMap<String, Integer> visitedStatesW = new HashMap<String, Integer>(hashCapacity);
-    HashMap<String, Integer> visitedStatesR = new HashMap<String, Integer>(hashCapacity);
+    HashMap<String, Double> visitedStatesW = new HashMap<String, Double>(hashCapacity);
+    HashMap<String, Double> visitedStatesR = new HashMap<String, Double>(hashCapacity);
 
     /**
      * Performs a move
@@ -29,49 +41,123 @@ public class Player {
             // Must play "pass" move if there are no other moves possible.
             return new GameState(pState, new Move());
         }
-        int bestValue=-valueWin;
-        int tmp_value;
-        GameState bestMove=lNextStates.firstElement();
-        //System.err.println("new tern------------------------------------------------------");
-        for(GameState childState: lNextStates){
-            if(pState.getNextPlayer()==Constants.CELL_RED){
-                tmp_value=-negaMax(childState, maxDepth, -valueWin, valueWin ,1);
-                //bestMove=lNextStates.firstElement();
-                //System.err.println(childState.toString(Constants.CELL_RED));
-            }
-            else{
-                tmp_value=-negaMax(childState, maxDepth, -valueWin, valueWin ,-1);
-                //System.err.println(childState.toString(Constants.CELL_WHITE));
-            }
+
+        int initColor = (pState.getNextPlayer()==Constants.CELL_RED) ? 1:-1;
+        GameState bestMove;
+        //bestMove = maxDepthNegaMax(lNextStates, initColor, pDue);
+        bestMove = iterativeNegaMax(lNextStates, initColor, pDue);
+
+        return bestMove;
+            
+    }
+
+    public GameState maxDepthNegaMax(Vector<GameState> nextStates, int initColor, Deadline deadline){
+
+        double bestValue=-valueWin;
+        double tmp_value;
+        GameState bestMove=nextStates.firstElement();
+        for(GameState childState: nextStates){
+            // Run negamax to max depth on each state
+            tmp_value=-negaMax(childState, maxDepth, -valueWin, valueWin , initColor, deadline);
+
             if(tmp_value>bestValue){
                 bestValue=tmp_value;
                 bestMove=childState;
             }
-        //System.err.println(tmp_value);
-        //System.err.println(value(childState, 1));
+            if(useDeadline && deadline.timeUntil() < timeLimitThresh){
+                //System.err.println("TIME RAN OUT");
+                break;
+            }
         }
-        System.err.println(visitedStatesW.size());
-        System.err.println(visitedStatesR.size());
+
         return bestMove;
-            
     }
-    public int negaMax(GameState gameState, int depth, int alpha, int beta,
-            int colour){
-        int tmpValue;
+
+
+    public GameState iterativeNegaMax(Vector<GameState> nextStates, int initColor, Deadline deadline){
+        Vector<GameState> newBestStates = new Vector<GameState>();
+        Vector<GameState> lastBestStates = nextStates;
+        double tmpValueMove;
+        double bestValue;
+        double bestMoveThresh = 1.5; /*If a new tmpValueMove is above
+            bestMoveThresh*bestValue, the newBestStates list is cleared*/
+        boolean timeRanOut = false;
+        GameState bestMove = lastBestStates.firstElement();
+
+        for(int plusDepth = 0; plusDepth < extraDepth; plusDepth++){
+            if(lastBestStates.size() == 1){ // Break if only one move available
+                break;
+            }
+            if(useDeadline && deadline.timeUntil() < timeLimitThresh){
+                //System.err.println("TIME RAN OUT");
+                timeRanOut = true;
+                break;
+            }
+            bestValue = -valueWin;
+            newBestStates = new Vector<GameState>();
+
+            for(GameState tmpState:lastBestStates){
+
+                tmpValueMove=-negaMax(tmpState, maxDepth+plusDepth, -valueWin, valueWin, initColor, deadline);
+                if( tmpValueMove>=bestValue){
+
+                    if(tmpValueMove > bestValue*bestMoveThresh){
+                        newBestStates.clear();
+                        newBestStates.add(tmpState);
+                    }else{ // this means tmp_value_move == bestValue
+                        newBestStates.add(tmpState);
+                    }
+                    bestValue = tmpValueMove;
+                }
+
+            }
+            lastBestStates = newBestStates;
+
+        }
+
+        bestValue = -valueWin;
+        //int counter = 0;
+        if(newBestStates.size() != 1 && timeRanOut == false){
+            for(GameState tmpState:newBestStates){
+                if(useDeadline && deadline.timeUntil() < timeLimitThresh){
+                    //System.err.println("TIME RAN OUT");
+                    break;
+                }
+                tmpValueMove=-negaMax(tmpState, maxDepth+extraDepth, -valueWin, valueWin, initColor, deadline);
+                if( tmpValueMove>=bestValue){
+                    bestValue=tmpValueMove;
+                    bestMove=tmpState;
+                }
+            }
+        }else{
+            bestMove = newBestStates.lastElement();
+        }
+
+        return bestMove;
+
+    }
+
+    public double negaMax(GameState gameState, int depth, double alpha, double beta,
+            int colour, Deadline deadline){
+        double tmpValue;
         String childStateString;
         if(gameState.isEOG()){
             return valueEnd(gameState)*colour;
         }
-        else if(depth==0){
+        else if(depth==0 || (useDeadline && deadline.timeUntil() < timeLimitThresh)){
             return value(gameState, colour)*colour;
         }
         else{
 
             Vector<GameState> lNextStates = new Vector<>();
             gameState.findPossibleMoves(lNextStates);
+
+            //Vector<GamestateValue> sortedStates = sortStates(lNextStates, colour);
             
-            int bestMove=-1000;
+            double bestMove=-1000.0;
             for(GameState childState:lNextStates){
+            //for(GamestateValue stateValue:sortedStates){
+                //GameState childState = stateValue.gamestate;
 
                 childStateString = getGamestateString(childState);
 
@@ -79,12 +165,11 @@ public class Player {
                     tmpValue = getVisitedValue(childStateString, colour);  
                 }
                 else{
-                        // if not in hashMap, compute value and store in hashMap
-                    tmpValue=-negaMax(childState, depth-1,-beta,-alpha, -colour);
+                    // if not in hashMap, compute value and store in hashMap
+                    tmpValue=-negaMax(childState, depth-1,-beta,-alpha, -colour, deadline);
                     storeVisited(childStateString,tmpValue, colour);
                     //storeVisited(getGamestateString(childState.reversed()), tmpValue*colour, -colour);
                 }
-                //tmpValue=-negaMax(childState, depth-1,-beta,-alpha, -colour);
                 bestMove=Math.max(bestMove, tmpValue);
                 alpha=Math.max(alpha, tmpValue);
                 if(alpha>=beta){
@@ -98,7 +183,7 @@ public class Player {
         }
     }
     
-    public int valueEnd(GameState gameState){
+    public double valueEnd(GameState gameState){
         if(gameState.isWhiteWin()){
             return valueWin;
         }
@@ -106,66 +191,132 @@ public class Player {
             return -valueWin;
         }
         else{
-            return valueTie;
+            return 0;
         }
         
     }
-    public int value(GameState gameState, int colour){
-        return number(gameState, Constants.CELL_WHITE, colour==1)
-                -number(gameState, Constants.CELL_RED, colour==-1);
+    public double value(GameState gameState, int colour){
+        return boardScore(gameState, Constants.CELL_WHITE, colour==1)
+                -boardScore(gameState, Constants.CELL_RED, colour==-1);
         }
-    public int number(GameState gameState, int colourPlayer, boolean play){
-        int number=0;
-        int longestJump=0;
+    public double boardScore(GameState gameState, int colourPlayer, boolean play){
+        double pieceScore=0.0;
+        double longestJump=0.0;
+        double distanceToCenter;
         for( int row=0; row<boardSize; row++){
             for(int col=0;col<boardSize;col++){
                 int cell=gameState.get(row, col);
-                if(cell==colourPlayer && play){
-                    number++;
-                    longestJump=Math.max(longestJump, 
-                            killerJump(gameState, row, col, colourPlayer));
+                // +1 for player cell, either pawn or king
+                if(cell==colourPlayer || cell==Constants.CELL_KING+colourPlayer){
+                    pieceScore += 1.0;
+                    // Bonus score if players turn and jump available
+                    if (play){
+                        longestJump=Math.max(longestJump, killerJump(gameState, row, col, 
+                                colourPlayer, cell == Constants.CELL_KING, new ArrayList<int[]>()));
+                    }
+                    // If piece on the sides, more score for being untakable
+                    if (col == 0 || col == 7){
+                        pieceScore += 0.2;
+                    }
+                    // Pieces closer to center get higher score
+                    distanceToCenter = Math.abs(3.5-row) + Math.abs(3.5-col);
+                    pieceScore += 0.2/distanceToCenter;
                 }
-                else if(cell==colourPlayer){
-                    number++;
+                // Kings get higher score
+                if(cell ==Constants.CELL_KING+colourPlayer){
+                    pieceScore = pieceScore*1.7;
                 }
-                else if(cell ==Constants.CELL_KING+colourPlayer){
-                    number+=4;
+                // If players pawn far ahead on the board (almost king), more score
+                if(cell == colourPlayer && cell != Constants.CELL_KING){
+                    if(cell == Constants.CELL_WHITE && row < 2 || cell == Constants.CELL_RED && row > 5){
+                        pieceScore += 0.3;
+                    }
                 }
                 
             }
 
-        }
-       return number +longestJump;
+        }/*
+        String printPiece = "piece: "+pieceScore;
+        String printJump = "jump: "+longestJump*10;
+        //System.err.println(printPiece);
+        System.err.println(printJump);
+        System.err.println("");*/
+        /*if(longestJump != 0.0){
+            System.err.println(longestJump);
+        }*/
+       return pieceScore + longestJump*longestJump;
     }
-    public int killerJump(GameState gameState, int pRow, 
-            int pCol, int colourPlayer){
-        int oponent= (colourPlayer==Constants.CELL_WHITE) 
+
+    public double killerJump(GameState gameState, int pRow, 
+            int pCol, int colourPlayer, boolean isKing, ArrayList<int[]> killedCells){
+
+        int opponent= (colourPlayer==Constants.CELL_WHITE) 
                 ? Constants.CELL_RED :Constants.CELL_WHITE;
-        int cellLeft2;
-        int cellRight2;
-        int cellLeft;
-        int cellRight;
-        int jumpLeft=0;
-        int jumpRight=0;
-        int longestJump;
-        GameState tmpState;
-        cellLeft=gameState.get(pRow-1, pCol-1);
-        cellLeft2=gameState.get(pRow-2, pCol-2);
-        if(cellLeft==oponent && cellLeft2==Constants.CELL_EMPTY){
-            tmpState=gameState;
-            tmpState.set((pRow-1)*4+pCol-1,Constants.CELL_EMPTY);
-            jumpLeft=1+killerJump(tmpState, pRow-2, pCol-2, colourPlayer);
+        int cellAhead1;
+        int cellAhead2;
+        double longestJump = 0.0;
+        double jumpValue = 2.0; // Value of a possible jump
+        int nrJumps = (isKing) ? 4:2;
+        double[] jumps = new double[nrJumps];
+        int jumpidx = 0;
+
+        ArrayList<int[]> newKilledCells;
+
+        for(int rowFwd = -1; rowFwd < 3; rowFwd += 2){
+            // If not king, set the rowFwd to different value and break after first loop
+            if(!isKing){rowFwd = (colourPlayer == Constants.CELL_WHITE) ? -1 : 1;}
+            for (int colFwd = -1; colFwd < 3; colFwd += 2){
+                cellAhead1 = gameState.get(pRow + rowFwd, pCol + colFwd);
+                cellAhead2 = gameState.get(pRow + rowFwd*2, pCol + colFwd*2);
+
+                // Check if cell ahead is opponent 
+                if(cellAhead1 == opponent && cellAhead2 == Constants.CELL_EMPTY && 
+                        !checkKilledCells(killedCells, pRow + rowFwd, pCol + colFwd)){
+                    newKilledCells = copyKilledCells(killedCells);
+                    addKilledCell(newKilledCells, pRow + rowFwd, pCol + colFwd);
+                    jumps[jumpidx] = jumpValue + killerJump(gameState, pRow+2*rowFwd, 
+                                pCol+2*colFwd, colourPlayer, isKing, newKilledCells);
+                }
+                jumpidx += 1;
+            }
+            if(!isKing){ // If not king, dont go through the next rowFwd value
+                break;
+            }
         }
-        cellRight=gameState.get(pRow-1, pCol+1);
-        cellRight2=gameState.get(pRow-2, pCol+2);
-        if(cellRight==oponent&& cellRight2==Constants.CELL_EMPTY){
-            tmpState=gameState;
-            tmpState.set((pRow-1)*4+pCol+1,Constants.CELL_EMPTY);
-            jumpRight=1+killerJump(tmpState, pRow-2, pCol+2, colourPlayer);
+
+        for(int idx=0; idx<nrJumps; idx++){
+            if(jumps[idx] > longestJump){
+                longestJump = jumps[idx];
+            }
         }
-        longestJump=Math.max(jumpLeft,jumpRight);
                 
         return longestJump;
+    }
+    public ArrayList<int[]> copyKilledCells(ArrayList<int[]> killedCells){
+        ArrayList<int[]> returnList = new ArrayList<int[]>();
+        int[] newCoords;
+        for(int[] coords:killedCells){
+            newCoords = new int[2];
+            newCoords[0] = coords[0];
+            newCoords[1] = coords[1];
+            returnList.add(newCoords);
+        }
+        return returnList;
+    }
+    public void addKilledCell(ArrayList<int[]> killedCells, int row, int col){
+        int[] newCoords = {row,col};
+        killedCells.add(newCoords);
+    }
+    public boolean checkKilledCells(ArrayList<int[]> killedCells, int row, int col){
+        // Returns true if cell is in the killed cells
+        boolean isKilled = false;
+        for(int[] coords:killedCells){
+            if(coords[0] == row && coords[1] == col){
+                isKilled = true;
+                break;
+            }
+        }
+        return isKilled;
     }
     public int takable(GameState gameState, int row, int col){
         return 1;
@@ -180,20 +331,99 @@ public class Player {
     }
 
     public boolean isVisited(String gamestateString, int colour){
-        HashMap<String, Integer> visitedStates = (colour == 1) ? visitedStatesW : visitedStatesR;
+        HashMap<String, Double> visitedStates = (colour == 1) ? visitedStatesW : visitedStatesR;
         return visitedStates.containsKey(gamestateString);
     }
 
-    public int getVisitedValue(String gamestateString, int colour){
+    public double getVisitedValue(String gamestateString, int colour){
         // Only call this function if containsVisited has returned true first
-        HashMap<String, Integer> visitedStates = (colour == 1) ? visitedStatesW : visitedStatesR;
+        HashMap<String, Double> visitedStates = (colour == 1) ? visitedStatesW : visitedStatesR;
         return visitedStates.get(gamestateString); 
     }
 
-    public void storeVisited(String gamestateString, int value, int colour){
-        HashMap<String, Integer> visitedStates = (colour == 1) ? visitedStatesW : visitedStatesR;
+    public void storeVisited(String gamestateString, double value, int colour){
+        HashMap<String, Double> visitedStates = (colour == 1) ? visitedStatesW : visitedStatesR;
         visitedStates.put(gamestateString, value);
         return;
     }
+
+    public Vector<GamestateValue> sortStates(Vector<GameState> statesVector, int colour){
+        Vector<GamestateValue> outVector = new Vector<>();
+        double value;
+        String stateString;
+        for(GameState state:statesVector){
+            // Getting the value for each state
+            stateString = getGamestateString(state);
+            if(isVisited(stateString, colour)){
+                value = getVisitedValue(stateString, colour);  
+            }else{
+                if(state.isEOG()){
+                    value = -valueEnd(state)*colour;
+                }else{
+                    value = -value(state, colour)*colour;
+                }
+            }
+            outVector.add(new GamestateValue(state, value));
+        }
+        Collections.sort(outVector, new GamestateValueCompare());
+
+        /*for(GamestateValue test:outVector){
+            System.err.println(test.value);
+        }
+        System.err.println("");*/
+
+        return outVector;
+    }
+
+    public boolean checkOneOnOne(GameState gamestate){
+        int totalWhite = 0;
+        int totalRed = 0;
+        int nr_cells = boardSize*boardSize/2;
+        for(int i = 0; i< nr_cells; i++){
+            if(gamestate.get(i) == Constants.CELL_WHITE){
+                totalWhite++;
+            }else if(gamestate.get(i) == Constants.CELL_RED){
+                totalRed++;
+            }
+        }
+        if(totalRed == 1 && totalWhite == 1){
+            return true;
+        }else{
+            return false;
+        }
+    }
     
+}
+
+class GamestateValue{
+    public GameState gamestate;
+    public double value;
+
+    public GamestateValue(GameState inState, double inValue){
+        gamestate = inState;
+        value = inValue;
+    }
+
+}
+
+class GamestateValueCompare implements Comparator<GamestateValue> {
+
+    @Override
+    public int compare(GamestateValue stateValue1, GamestateValue stateValue2) {
+        if(Math.max(stateValue1.value, stateValue2.value) == stateValue1.value){
+            return -1;
+        }else if(Math.max(stateValue1.value, stateValue2.value) == stateValue2.value){
+            return 1;
+        }else{
+            return 0;
+        }
+    }
+}
+
+class GameStateCopy{
+    public GameState gamestate;
+
+    public GameStateCopy(GameState inState){
+        gamestate = inState;
+    }
 }
