@@ -18,7 +18,7 @@ public class Player {
     int maxDepth = 11;
     int extraDepth = 2; // used for iterative NegaMax
     boolean useDeadline = true;
-    long timeLimitThresh = 1000000; // 1*10^8 = 0.1 seconds 
+    long timeLimitThresh = 100000; // 1*10^8 = 0.1 seconds 
     int hashCapacity = 10000000;
     HashMap<String, Double> visitedStatesW = new HashMap<String, Double>(hashCapacity);
     HashMap<String, Double> visitedStatesR = new HashMap<String, Double>(hashCapacity);
@@ -89,7 +89,6 @@ public class Player {
                 break;
             }
             if(useDeadline && deadline.timeUntil() < timeLimitThresh){
-                //System.err.println("TIME RAN OUT");
                 timeRanOut = true;
                 break;
             }
@@ -107,13 +106,18 @@ public class Player {
                     if(tmpValueMove > bestValue*bestMoveThresh){
                         newBestStates.clear();
                         newBestStates.add(tmpState);
-                    }else{ // this means tmp_value_move == bestValue
-                        newBestStates.add(tmpState);
+                    }else{ 
+                        // Putting the new state with the best value first in the list.
+                        // This effectively gives ordered alpha beta pruning
+                        newBestStates.add(0,tmpState);
                     }
                     bestValue = tmpValueMove;
                 }
 
             }
+            /*while(newBestStates.size()>4){
+                newBestStates.remove(newBestStates.size()-1);
+            }*/
             lastBestStates = newBestStates;
 
         }
@@ -126,7 +130,6 @@ public class Player {
             visitedStatesR = new HashMap<String, Double>(hashCapacity);
             for(GameState tmpState:newBestStates){
                 if(useDeadline && deadline.timeUntil() < timeLimitThresh){
-                    //System.err.println("TIME RAN OUT");
                     break;
                 }
                 tmpValueMove=-negaMax(tmpState, maxDepth+extraDepth, -valueWin, valueWin, initColor, deadline);
@@ -164,7 +167,7 @@ public class Player {
 
             //Vector<GamestateValue> sortedStates = sortStates(lNextStates, colour);
             
-            double bestMove=-1000.0;
+            double bestMove=-valueWin;
             for(GameState childState:lNextStates){
             //for(GamestateValue stateValue:sortedStates){
                 //GameState childState = stateValue.gamestate;
@@ -178,7 +181,7 @@ public class Player {
                     // if not in hashMap, compute value and store in hashMap
                     tmpValue=-negaMax(childState, depth-1,-beta,-alpha, -colour, deadline);
                     storeVisited(childStateString,tmpValue, colour);
-                    //storeVisited(getGamestateString(childState.reversed()), tmpValue*colour, -colour);
+                    storeVisited(getGamestateString(childState.reversed()), tmpValue*colour, -colour);
                 }
                 bestMove=Math.max(bestMove, tmpValue);
                 alpha=Math.max(alpha, tmpValue);
@@ -239,7 +242,7 @@ public class Player {
                 // If players pawn far ahead on the board (almost king), more score
                 if(cell == colourPlayer && cell != Constants.CELL_KING){
                     if(cell == Constants.CELL_WHITE && row < 2 || cell == Constants.CELL_RED && row > 5){
-                        pieceScore += 0.3;
+                        pieceScore += 0.4;
                     }
                 }
                 
@@ -265,7 +268,7 @@ public class Player {
         int cellAhead1;
         int cellAhead2;
         double longestJump = 0.0;
-        double jumpValue = 2.0; // Value of a possible jump
+        double jumpValue = 3.0; // Value of a possible jump
         int nrJumps = (isKing) ? 4:2;
         double[] jumps = new double[nrJumps];
         int jumpidx = 0;
@@ -327,9 +330,6 @@ public class Player {
             }
         }
         return isKilled;
-    }
-    public int takable(GameState gameState, int row, int col){
-        return 1;
     }
     public String getGamestateString(GameState gamestate){
         String return_str = "";
