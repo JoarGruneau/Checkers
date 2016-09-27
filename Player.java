@@ -145,7 +145,11 @@ public class Player {
             return valueEnd(gameState)*colour;
         }
         else if(depth==0 || (useDeadline && deadline.timeUntil() < timeLimitThresh)){
-            return value(gameState, colour)*colour;
+            if(depth>=2){
+                return 0; // In this case you're deep enough in the tree to give a good heuristic value
+            }else{
+                return value(gameState, colour)*colour;
+            }
         }
         else{
 
