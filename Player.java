@@ -16,9 +16,9 @@ public class Player {
     double valueTie=0.0;
     int boardSize=8;
     int maxDepth = 11;
-    int extraDepth = 5; // used for iterative NegaMax
+    int extraDepth = 2; // used for iterative NegaMax
     boolean useDeadline = true;
-    long timeLimitThresh = 10000000; // 1*10^8 = 0.1 seconds 
+    long timeLimitThresh = 1000000; // 1*10^8 = 0.1 seconds 
     int hashCapacity = 10000000;
     HashMap<String, Double> visitedStatesW = new HashMap<String, Double>(hashCapacity);
     HashMap<String, Double> visitedStatesR = new HashMap<String, Double>(hashCapacity);
@@ -93,8 +93,11 @@ public class Player {
                 timeRanOut = true;
                 break;
             }
+            // Reset the best states and transpo tables
             bestValue = -valueWin;
             newBestStates = new Vector<GameState>();
+            visitedStatesW = new HashMap<String, Double>(hashCapacity);
+            visitedStatesR = new HashMap<String, Double>(hashCapacity);
 
             for(GameState tmpState:lastBestStates){
 
@@ -115,9 +118,12 @@ public class Player {
 
         }
 
-        bestValue = -valueWin;
         //int counter = 0;
         if(newBestStates.size() != 1 && timeRanOut == false){
+            // Reset transpo tables
+            bestValue = -valueWin;
+            visitedStatesW = new HashMap<String, Double>(hashCapacity);
+            visitedStatesR = new HashMap<String, Double>(hashCapacity);
             for(GameState tmpState:newBestStates){
                 if(useDeadline && deadline.timeUntil() < timeLimitThresh){
                     //System.err.println("TIME RAN OUT");
@@ -146,7 +152,7 @@ public class Player {
         }
         else if(depth==0 || (useDeadline && deadline.timeUntil() < timeLimitThresh)){
             if(depth>=2){
-                return 0; // In this case you're deep enough in the tree to give a good heuristic value
+                return -valueWin*colour; // In this case you're deep enough in the tree to give a good heuristic value
             }else{
                 return value(gameState, colour)*colour;
             }
@@ -228,7 +234,7 @@ public class Player {
                 }
                 // Kings get higher score
                 if(cell ==Constants.CELL_KING+colourPlayer){
-                    pieceScore = pieceScore*1.7;
+                    pieceScore += 0.4;
                 }
                 // If players pawn far ahead on the board (almost king), more score
                 if(cell == colourPlayer && cell != Constants.CELL_KING){
